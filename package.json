@@ -1,0 +1,15 @@
+{
+  "name": "karries-kitchen",
+  "version": "1.0.0",
+  "description": "Single-file HTML recipe app served by Express for Railway deployment",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}
