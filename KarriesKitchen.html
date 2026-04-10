@@ -513,14 +513,18 @@ textarea.text-input { min-height: 160px; resize: vertical; font-size: 12px; line
         <!-- AI Chat / HTML tab -->
         <div class="admin-panel" id="panel-aichat">
           <div class="social-note">
-            Paste recipes from <strong>ChatGPT</strong>, <strong>Perplexity</strong>, or any AI chat. You can paste plain text, formatted text, or even raw HTML — the AI will find and extract all recipes automatically.
+            Paste recipes from <strong>ChatGPT</strong>, <strong>Perplexity</strong>, or any AI chat. You can paste plain text, formatted text, or raw HTML. You can also upload an <strong>.html</strong> file directly. The AI will find and extract all recipes automatically.
           </div>
           <div class="field-row">
             <label class="field-label">Source URL or label (optional)</label>
             <input type="text" class="text-input" id="aichat-url" placeholder="e.g. ChatGPT, Perplexity, or a URL..." />
           </div>
           <div class="field-row">
-            <label class="field-label">Paste chat output, text, or HTML</label>
+            <label class="field-label">Upload an HTML file (optional)</label>
+            <input type="file" accept=".html,.htm,.txt" id="aichat-file" class="text-input" onchange="loadAIChatFile()" style="padding:8px;" />
+          </div>
+          <div class="field-row">
+            <label class="field-label">Or paste chat output, text, or HTML</label>
             <textarea class="text-input" style="min-height:200px" id="aichat-text" placeholder="Paste the full chat response, copied page text, or raw HTML here. The AI will find every recipe in the content."></textarea>
           </div>
           <button class="btn btn-primary" id="aichat-extract-btn" onclick="extractFromAIChat()">Extract recipes with AI</button>
@@ -1261,21 +1265,38 @@ function clearSocial(){
 }
 
 /* ── AI Chat / HTML ── */
+function stripHtmlToText(html){
+  // Remove script/style blocks entirely, then strip tags, collapse whitespace
+  let s=html.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'');
+  const tmp=document.createElement('div');
+  tmp.innerHTML=s;
+  return (tmp.textContent||tmp.innerText||'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+}
+function looksLikeHtml(s){
+  return /<\s*(html|head|body|div|p|h[1-6]|ul|ol|li|table|span|br|section|article)\b/i.test(s);
+}
+function loadAIChatFile(){
+  const fileInput=document.getElementById('aichat-file');
+  if(!fileInput.files.length)return;
+  const reader=new FileReader();
+  reader.onload=e=>{document.getElementById('aichat-text').value=e.target.result;};
+  reader.readAsText(fileInput.files[0]);
+}
 function extractFromAIChat(){
   const url=document.getElementById('aichat-url').value.trim();
   let text=document.getElementById('aichat-text').value.trim();
-  // Strip HTML tags to plain text if it looks like HTML
-  if(text.includes('<') && text.includes('>')){
-    const tmp=document.createElement('div');
-    tmp.innerHTML=text;
-    text=tmp.textContent||tmp.innerText||text;
+  // Strip HTML to readable text if it looks like an HTML document
+  if(looksLikeHtml(text)){
+    text=stripHtmlToText(text);
   }
+  if(!text){showAdminErr('aichat-error','Please paste some text or upload a file first.');return;}
   runExtraction(text,url||'','aichat','aichat-extract-btn','aichat-spinner','aichat-error','aichat-preview','aichat-preview-count','aichat-add-btn','aichat-preview-card');
 }
 function clearAIChat(){
   document.getElementById('aichat-preview').className='preview-wrap';
   document.getElementById('aichat-text').value='';
   document.getElementById('aichat-url').value='';
+  document.getElementById('aichat-file').value='';
   document.getElementById('aichat-error').className='error-box';
   pendingMap['aichat']=null;
 }
