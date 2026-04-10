@@ -136,7 +136,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(
 .modal-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; line-height: 1.2; }
 .modal-sub { font-size: 12px; color: var(--text-light); margin-top: 4px; }
 .modal-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.yt-link { font-size: 12px; font-weight: 500; color: var(--red-text); background: var(--red-light); border: 1px solid rgba(160,41,31,0.15); border-radius: 6px; padding: 5px 10px; text-decoration: none; white-space: nowrap; transition: opacity 0.15s; }
+.yt-link { font-size: 12px; font-weight: 500; color: var(--teal-text); background: var(--teal-light); border: 1px solid rgba(0,100,80,0.15); border-radius: 6px; padding: 5px 10px; text-decoration: none; white-space: nowrap; transition: opacity 0.15s; display: inline-flex; align-items: center; gap: 2px; }
 .yt-link:hover { opacity: 0.8; }
 .close-btn { background: var(--cream); border: 1px solid var(--border); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; color: var(--text-mid); flex-shrink: 0; transition: background 0.15s; }
 .close-btn:hover { background: var(--border-mid); }
@@ -860,6 +860,18 @@ function getYtUrl(r){
   if(customUrls[r.id])return customUrls[r.id];
   return '';
 }
+function isVideoUrl(url){
+  return /youtube\.com|youtu\.be|vimeo\.com|tiktok\.com|instagram\.com\/reel|facebook\.com.*\/video/i.test(url);
+}
+function sourceLinkLabel(url){
+  if(!url)return '';
+  if(isVideoUrl(url))return '▶ Watch';
+  if(/instagram\.com/i.test(url))return '📷 View Post';
+  if(/facebook\.com/i.test(url))return '📘 View Post';
+  if(/perplexity\.ai/i.test(url))return '🔍 View Source';
+  if(/chatgpt\.com|chat\.openai/i.test(url))return '💬 View Chat';
+  return '🔗 View Source';
+}
 
 function openModal(id){
   const r=allRecipes().find(x=>x.id===id);
@@ -873,10 +885,10 @@ function openModal(id){
   document.getElementById('m-title').textContent=cap(r.title);
   document.getElementById('m-sub').textContent=[r.source,r.yield,r.storage].filter(Boolean).join(' · ');
 
-  // YouTube link
+  // Source link (YouTube, Instagram, web, etc.)
   const ytUrl=getYtUrl(r);
   const ytEl=document.getElementById('m-yt-link');
-  if(ytUrl){ytEl.href=ytUrl;ytEl.style.display='inline-flex';}
+  if(ytUrl){ytEl.href=ytUrl;ytEl.textContent=sourceLinkLabel(ytUrl);ytEl.style.display='inline-flex';}
   else ytEl.style.display='none';
 
   let topHtml=r.macros
@@ -951,7 +963,7 @@ function saveUrl(id){
   if(imp){imp.ytUrl=url;saveImported();}
   else{customUrls[id]=url;saveUrls();}
   const ytEl=document.getElementById('m-yt-link');
-  if(url){ytEl.href=url;ytEl.style.display='inline-flex';}
+  if(url){ytEl.href=url;ytEl.textContent=sourceLinkLabel(url);ytEl.style.display='inline-flex';}
   else ytEl.style.display='none';
   const saved=document.getElementById(`url-saved-${id}`);
   saved.classList.add('show');setTimeout(()=>saved.classList.remove('show'),1800);
@@ -1258,7 +1270,7 @@ function extractFromAIChat(){
     tmp.innerHTML=text;
     text=tmp.textContent||tmp.innerText||text;
   }
-  runExtraction(text,url||'AI Chat','aichat','aichat-extract-btn','aichat-spinner','aichat-error','aichat-preview','aichat-preview-count','aichat-add-btn','aichat-preview-card');
+  runExtraction(text,url||'','aichat','aichat-extract-btn','aichat-spinner','aichat-error','aichat-preview','aichat-preview-count','aichat-add-btn','aichat-preview-card');
 }
 function clearAIChat(){
   document.getElementById('aichat-preview').className='preview-wrap';
