@@ -306,8 +306,8 @@ textarea.text-input { min-height: 160px; resize: vertical; font-size: 12px; line
 .error-box { background: var(--red-light); border: 1px solid rgba(160,41,31,0.2); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-top: 0.75rem; font-size: 12px; color: var(--red-text); display: none; }
 .error-box.show { display: block; }
 .social-note { font-size: 12px; color: var(--text-light); background: var(--cream); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 1rem; line-height: 1.55; margin-bottom: 1rem; }
-.admin-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
-.admin-tab { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 9px 18px; border: none; background: transparent; color: var(--text-light); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+.admin-tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
+.admin-tab { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 9px 14px; border: none; background: transparent; color: var(--text-light); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
 .admin-tab:hover { color: var(--text-dark); }
 .admin-tab.active { color: var(--text-dark); border-bottom-color: var(--text-dark); font-weight: 500; }
 .admin-panel { display: none; }
@@ -418,6 +418,8 @@ textarea.text-input { min-height: 160px; resize: vertical; font-size: 12px; line
           <button class="admin-tab active" onclick="switchAdminTab('youtube',this)">YouTube</button>
           <button class="admin-tab" onclick="switchAdminTab('url',this)">Web URL</button>
           <button class="admin-tab" onclick="switchAdminTab('social',this)">Instagram / Facebook</button>
+          <button class="admin-tab" onclick="switchAdminTab('aichat',this)">AI Chat / HTML</button>
+          <button class="admin-tab" onclick="switchAdminTab('csv',this)">CSV</button>
           <button class="admin-tab" onclick="switchAdminTab('manual',this)">Manual</button>
         </div>
 
@@ -505,6 +507,64 @@ textarea.text-input { min-height: 160px; resize: vertical; font-size: 12px; line
               </div>
             </div>
             <div class="preview-card" id="social-preview-card"></div>
+          </div>
+        </div>
+
+        <!-- AI Chat / HTML tab -->
+        <div class="admin-panel" id="panel-aichat">
+          <div class="social-note">
+            Paste recipes from <strong>ChatGPT</strong>, <strong>Perplexity</strong>, or any AI chat. You can paste plain text, formatted text, or even raw HTML — the AI will find and extract all recipes automatically.
+          </div>
+          <div class="field-row">
+            <label class="field-label">Source URL or label (optional)</label>
+            <input type="text" class="text-input" id="aichat-url" placeholder="e.g. ChatGPT, Perplexity, or a URL..." />
+          </div>
+          <div class="field-row">
+            <label class="field-label">Paste chat output, text, or HTML</label>
+            <textarea class="text-input" style="min-height:200px" id="aichat-text" placeholder="Paste the full chat response, copied page text, or raw HTML here. The AI will find every recipe in the content."></textarea>
+          </div>
+          <button class="btn btn-primary" id="aichat-extract-btn" onclick="extractFromAIChat()">Extract recipes with AI</button>
+          <div class="error-box" id="aichat-error"></div>
+          <div class="spinner-wrap" id="aichat-spinner"><div class="spinner"></div><p>Analysing content...</p></div>
+          <div class="preview-wrap" id="aichat-preview">
+            <div class="preview-header">
+              <h3 id="aichat-preview-count">Recipe preview</h3>
+              <div class="preview-actions">
+                <button class="btn" onclick="clearAIChat()">Clear</button>
+                <button class="btn btn-add" id="aichat-add-btn" onclick="addPending('aichat')">Add to collection</button>
+              </div>
+            </div>
+            <div class="preview-card" id="aichat-preview-card"></div>
+          </div>
+        </div>
+
+        <!-- CSV tab -->
+        <div class="admin-panel" id="panel-csv">
+          <div class="social-note">
+            Import recipes from a CSV file or pasted CSV text. The CSV must have a header row. Recognised columns:<br>
+            <strong>title</strong> (required), <strong>category</strong>, <strong>source</strong>, <strong>url</strong>, <strong>yield</strong>, <strong>servings</strong>, <strong>prep</strong>, <strong>cook</strong>, <strong>storage</strong>, <strong>calories</strong>, <strong>protein</strong>, <strong>fat</strong>, <strong>carbs</strong>, <strong>fibre</strong>, <strong>ingredients</strong>, <strong>steps</strong>, <strong>tips</strong>.<br>
+            For <em>ingredients</em>, use <code>amount: name</code> separated by <code>|</code> (e.g. <code>2 cups: flour | 1 tsp: salt</code>).<br>
+            For <em>steps</em> and <em>tips</em>, separate with <code>|</code>.
+          </div>
+          <div class="field-row">
+            <label class="field-label">Upload CSV file</label>
+            <input type="file" accept=".csv,.txt" id="csv-file" class="text-input" onchange="loadCSVFile()" style="padding:8px;" />
+          </div>
+          <div class="field-row">
+            <label class="field-label">Or paste CSV text</label>
+            <textarea class="text-input" style="min-height:160px" id="csv-text" placeholder="title,category,source,ingredients,steps&#10;banana bread,bread,Grandma,2 cups: flour | 3: bananas | 1 tsp: baking soda,Mix dry | Mash bananas | Combine and bake 350°F 55 min"></textarea>
+          </div>
+          <button class="btn btn-primary" id="csv-parse-btn" onclick="parseCSVImport()">Parse CSV</button>
+          <div class="error-box" id="csv-error"></div>
+          <div class="preview-wrap" id="csv-preview">
+            <div class="preview-header">
+              <h3 id="csv-preview-count">Recipe preview</h3>
+              <div class="preview-actions">
+                <button class="btn" onclick="clearCSV()">Clear</button>
+                <button class="btn btn-add" id="csv-add-btn" onclick="addPending('csv')">Add to collection</button>
+              </div>
+            </div>
+            <div class="preview-card" id="csv-preview-card"></div>
           </div>
         </div>
 
@@ -1067,11 +1127,11 @@ async function runExtraction(text,urlRef,source,btnId,spinnerId,errId,previewId,
   document.getElementById(btnId).disabled=true;
   document.getElementById(spinnerId).className='spinner-wrap show';
 
-  const prompt=`You are a recipe extraction assistant. Extract ALL recipes from the following text and return a JSON array.
+  const prompt=`You are a recipe extraction assistant. Extract EVERY recipe from the following text and return a JSON array. There may be multiple recipes — you MUST return ALL of them, not just the first one or two. Count the recipes carefully before responding.
 Source URL: ${urlRef||'not provided'}
 Text:
 """
-${text.slice(0,8000)}
+${text.slice(0,16000)}
 """
 Return ONLY valid JSON, no markdown. Structure:
 [{"title":"lowercase","category":"${CAT_LIST_STR}","source":"author or site or 'Import'","ytUrl":"${urlRef||''}","yield":"4 servings","baseServings":4,"prep":"15 min","cook":"None","storage":"","calories":350,"macros":{"protein":"18g","fat":"12g","carbs":"40g","fibre":"5g"},"ingredients":[{"a":"amount","n":"name"}],"steps":["step"],"tips":["tip"]}]
@@ -1079,12 +1139,13 @@ IMPORTANT — Nutrition (per serving):
 - "calories" must always be a number (estimate from ingredients if not stated in source). Never null.
 - "macros" must always be an object with protein/fat/carbs/fibre as strings ending in "g" (e.g. "18g"). Estimate from ingredients if not stated in source. Never null.
 - baseServings must be a number matching the yield.
+IMPORTANT — Multiple recipes: If the text contains 3, 5, 10, or more recipes, return ALL of them in the array. Do NOT stop early or summarise. Every distinct recipe must be its own object in the array.
 If no recipe, return [].`;
 
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:4096,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:8192,messages:[{role:'user',content:prompt}]})
     });
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`API error ${res.status}`);}
     const data=await res.json();
@@ -1185,6 +1246,136 @@ function clearSocial(){
   document.getElementById('social-url').value='';
   document.getElementById('social-error').className='error-box';
   pendingMap['social']=null;
+}
+
+/* ── AI Chat / HTML ── */
+function extractFromAIChat(){
+  const url=document.getElementById('aichat-url').value.trim();
+  let text=document.getElementById('aichat-text').value.trim();
+  // Strip HTML tags to plain text if it looks like HTML
+  if(text.includes('<') && text.includes('>')){
+    const tmp=document.createElement('div');
+    tmp.innerHTML=text;
+    text=tmp.textContent||tmp.innerText||text;
+  }
+  runExtraction(text,url||'AI Chat','aichat','aichat-extract-btn','aichat-spinner','aichat-error','aichat-preview','aichat-preview-count','aichat-add-btn','aichat-preview-card');
+}
+function clearAIChat(){
+  document.getElementById('aichat-preview').className='preview-wrap';
+  document.getElementById('aichat-text').value='';
+  document.getElementById('aichat-url').value='';
+  document.getElementById('aichat-error').className='error-box';
+  pendingMap['aichat']=null;
+}
+
+/* ── CSV import ── */
+function loadCSVFile(){
+  const fileInput=document.getElementById('csv-file');
+  if(!fileInput.files.length)return;
+  const reader=new FileReader();
+  reader.onload=e=>{document.getElementById('csv-text').value=e.target.result;};
+  reader.readAsText(fileInput.files[0]);
+}
+
+function parseCSVText(raw){
+  // Parse CSV respecting quoted fields
+  const lines=[];
+  let current='';let inQuote=false;
+  for(let i=0;i<raw.length;i++){
+    const c=raw[i];
+    if(c==='"'){
+      if(inQuote&&raw[i+1]==='"'){current+='"';i++;}
+      else inQuote=!inQuote;
+    }else if(c==='\n'&&!inQuote){
+      lines.push(current);current='';
+    }else if(c==='\r'&&!inQuote){
+      // skip \r
+    }else{
+      current+=c;
+    }
+  }
+  if(current.trim())lines.push(current);
+
+  function splitRow(line){
+    const cols=[];let cur='';let q=false;
+    for(let i=0;i<line.length;i++){
+      const c=line[i];
+      if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}
+      else if(c===','&&!q){cols.push(cur.trim());cur='';}
+      else cur+=c;
+    }
+    cols.push(cur.trim());
+    return cols;
+  }
+
+  if(!lines.length)return[];
+  const headers=splitRow(lines[0]).map(h=>h.toLowerCase().replace(/[^a-z]/g,''));
+  const recipes=[];
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim())continue;
+    const cols=splitRow(lines[i]);
+    const row={};
+    headers.forEach((h,j)=>{row[h]=cols[j]||'';});
+
+    const titleVal=row.title||row.name||'';
+    if(!titleVal)continue;
+
+    const ings=(row.ingredients||'').split('|').filter(Boolean).map(s=>{
+      s=s.trim();
+      const parts=s.split(':');
+      if(parts.length>=2)return{a:parts[0].trim(),n:parts.slice(1).join(':').trim()};
+      // Try to split "2 cups flour" → amount + name
+      const m=s.match(/^([\d\/\.\s½¼¾⅓⅔⅛]+\s*\w*?)\s+(.+)$/);
+      if(m)return{a:m[1].trim(),n:m[2].trim()};
+      return{a:'',n:s};
+    });
+
+    const steps=(row.steps||row.instructions||row.directions||'').split('|').map(s=>s.trim()).filter(Boolean);
+    const tips=(row.tips||row.notes||'').split('|').map(s=>s.trim()).filter(Boolean);
+
+    const cals=parseInt(row.calories)||null;
+    const hasMacros=row.protein||row.fat||row.carbs||row.fibre;
+
+    recipes.push({
+      title:titleVal.toLowerCase(),
+      category:ALL_CATS.includes((row.category||'').toLowerCase())?(row.category||'').toLowerCase():'other',
+      source:row.source||row.author||'CSV Import',
+      ytUrl:row.url||row.yturl||row.link||'',
+      yield:row.yield||row.servings&&(row.servings+' servings')||'',
+      baseServings:parseInt(row.servings||row.baseservings)||parseInt(row.yield)||1,
+      prep:row.prep||row.preptime||'',
+      cook:row.cook||row.cooktime||'',
+      storage:row.storage||'',
+      calories:cals,
+      macros:hasMacros?{protein:(row.protein||'0g'),fat:(row.fat||'0g'),carbs:(row.carbs||'0g'),fibre:(row.fibre||row.fiber||'0g')}:null,
+      ingredients:ings,
+      steps:steps,
+      tips:tips
+    });
+  }
+  return recipes;
+}
+
+function parseCSVImport(){
+  const text=document.getElementById('csv-text').value.trim();
+  const errEl=document.getElementById('csv-error');
+  errEl.className='error-box';
+  document.getElementById('csv-preview').className='preview-wrap';
+  if(!text){showAdminErr('csv-error','Please upload a CSV file or paste CSV text.');return;}
+  try{
+    const recipes=parseCSVText(text);
+    if(!recipes.length)throw new Error('No recipes found. Make sure your CSV has a "title" column.');
+    pendingMap['csv']=recipes;
+    showAdminPreview(recipes,'csv-preview','csv-preview-count','csv-add-btn','csv-preview-card');
+  }catch(e){showAdminErr('csv-error',e.message);}
+}
+
+function clearCSV(){
+  document.getElementById('csv-preview').className='preview-wrap';
+  document.getElementById('csv-text').value='';
+  document.getElementById('csv-file').value='';
+  document.getElementById('csv-error').className='error-box';
+  pendingMap['csv']=null;
 }
 
 /* ── Manual add ── */
