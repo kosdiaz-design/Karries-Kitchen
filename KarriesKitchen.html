@@ -313,6 +313,17 @@ textarea.text-input { min-height: 160px; resize: vertical; font-size: 12px; line
 .drop-zone-label strong { color: var(--teal-text); }
 .drop-zone-file { font-size: 12px; color: var(--text-light); margin-top: 6px; pointer-events: none; }
 .drop-zone input[type="file"] { display: none; }
+.login-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(4px); }
+.login-card { background: var(--warm-white); border-radius: var(--radius); padding: 2rem; width: 300px; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
+.login-card h2 { font-family: 'Playfair Display', serif; margin: 0 0 0.5rem; font-size: 1.5rem; color: var(--text-dark); }
+.login-card p { font-size: 13px; color: var(--text-mid); margin: 0 0 1.25rem; }
+.login-card input { width: 100%; box-sizing: border-box; text-align: center; font-size: 24px; letter-spacing: 12px; padding: 12px; border: 1px solid var(--border-mid); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text-dark); }
+.login-card input:focus { outline: none; border-color: var(--teal-text); }
+.login-card .btn { margin-top: 1rem; width: 100%; }
+.login-error { color: var(--red-text); font-size: 12px; margin-top: 0.75rem; min-height: 1.2em; }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: middle; }
+.sync-dot.online { background: #4ade80; }
+.sync-dot.offline { background: #f87171; }
 .admin-tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
 .admin-tab { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 9px 14px; border: none; background: transparent; color: var(--text-light); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
 .admin-tab:hover { color: var(--text-dark); }
@@ -328,6 +339,18 @@ textarea.text-input { min-height: 160px; resize: vertical; font-size: 12px; line
 </head>
 <body>
 
+<!-- ── LOGIN GATE ── -->
+<div class="login-overlay" id="login-overlay" style="display:none;">
+  <div class="login-card">
+    <h2>Karrie's Kitchen</h2>
+    <p>Enter your PIN to sync</p>
+    <input type="password" id="login-pin" maxlength="6" placeholder="····" inputmode="numeric" autocomplete="off" />
+    <button class="btn btn-primary" onclick="submitLogin()">Sign in</button>
+    <button class="btn" onclick="skipLogin()" style="margin-top:0.5rem;width:100%;font-size:12px;">Use offline (no sync)</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
 <!-- ── HEADER ── -->
 <header class="site-header">
   <div class="header-top">
@@ -336,7 +359,7 @@ textarea.text-input { min-height: 160px; resize: vertical; font-size: 12px; line
       <div class="toggle-track"><div class="toggle-thumb"></div></div>
       <span id="toggle-label">Light</span>
     </button>
-    <p>Recipes · All categories</p>
+    <p>Recipes · All categories <span id="sync-status" style="font-size:11px;margin-left:6px;"></span></p>
   </div>
   <nav class="nav-tabs">
     <button class="nav-tab active" id="tab-recipes" onclick="switchPage('recipes',this)">Recipes</button>
@@ -689,9 +712,166 @@ let unitSystem    = localStorage.getItem('ck_units')||'us';
 let pendingMap    = {}; // source → pending recipes array
 
 function allRecipes(){ return [...BUILTIN, ...imported]; }
-function saveImported(){ localStorage.setItem('ck_imported', JSON.stringify(imported)); }
-function saveTracking(){ localStorage.setItem('ck_tracking', JSON.stringify(tracking)); }
-function saveUrls(){ localStorage.setItem('ck_urls', JSON.stringify(customUrls)); }
+function saveImported(){ localStorage.setItem('ck_imported', JSON.stringify(imported)); syncPush(['ck_imported']); }
+function saveTracking(){ localStorage.setItem('ck_tracking', JSON.stringify(tracking)); syncPush(['ck_tracking']); }
+function saveUrls(){ localStorage.setItem('ck_urls', JSON.stringify(customUrls)); syncPush(['ck_urls']); }
+
+/* ══════════════════════════════════════════
+   SYNC ENGINE
+══════════════════════════════════════════ */
+let syncUserId = sessionStorage.getItem('ck_sync_user') || null;
+let lastSyncTime = localStorage.getItem('ck_last_sync') || null;
+let _syncTimeout = null;
+let _pendingKeys = new Set();
+let _syncEnabled = false;
+
+function syncPush(keys) {
+  if (!_syncEnabled || !syncUserId) return;
+  keys.forEach(k => _pendingKeys.add(k));
+  clearTimeout(_syncTimeout);
+  _syncTimeout = setTimeout(async () => {
+    const items = [..._pendingKeys].map(k => ({ key: k, value: localStorage.getItem(k) }));
+    _pendingKeys.clear();
+    try {
+      const res = await fetch(`/api/sync/${syncUserId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        lastSyncTime = data.updated_at;
+        localStorage.setItem('ck_last_sync', lastSyncTime);
+        setSyncStatus('online');
+      }
+    } catch (e) {
+      console.warn('Sync push failed:', e);
+      setSyncStatus('offline');
+    }
+  }, 500);
+}
+
+async function syncPull() {
+  if (!_syncEnabled || !syncUserId) return;
+  try {
+    const url = lastSyncTime
+      ? `/api/sync/${syncUserId}?since=${encodeURIComponent(lastSyncTime)}`
+      : `/api/sync/${syncUserId}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const { data } = await res.json();
+    if (!data || !data.length) { setSyncStatus('online'); return; }
+
+    let needReload = false;
+    let maxTime = lastSyncTime;
+    for (const row of data) {
+      const current = localStorage.getItem(row.key);
+      if (current !== row.value) {
+        localStorage.setItem(row.key, row.value);
+        needReload = true;
+      }
+      if (!maxTime || row.updated_at > maxTime) maxTime = row.updated_at;
+    }
+    lastSyncTime = maxTime;
+    localStorage.setItem('ck_last_sync', lastSyncTime);
+    if (needReload) reloadFromLocalStorage();
+    setSyncStatus('online');
+  } catch (e) {
+    console.warn('Sync pull failed:', e);
+    setSyncStatus('offline');
+  }
+}
+
+function reloadFromLocalStorage() {
+  imported = JSON.parse(localStorage.getItem('ck_imported') || '[]');
+  tracking = JSON.parse(localStorage.getItem('ck_tracking') || '{}');
+  customUrls = JSON.parse(localStorage.getItem('ck_urls') || '{}');
+  unitSystem = localStorage.getItem('ck_units') || 'us';
+  nextId = Math.max(100, ...imported.map(r => r.id || 0)) + 1;
+  applyTheme(localStorage.getItem('ck_theme') || 'light');
+  Object.keys(customUrls).forEach(k => {
+    if (k.startsWith('cat_')) {
+      const id = parseInt(k.replace('cat_', ''));
+      const b = BUILTIN.find(x => x.id === id);
+      if (b) b.category = customUrls[k];
+    }
+  });
+  const k = localStorage.getItem('ck_api_key');
+  if (k) { showKeySaved(k); collapseKeyCard(); }
+  renderGrid();
+}
+
+async function syncPushAll() {
+  if (!_syncEnabled || !syncUserId) return;
+  const keys = ['ck_imported', 'ck_tracking', 'ck_urls', 'ck_api_key', 'ck_units', 'ck_theme'];
+  const items = keys.map(k => ({ key: k, value: localStorage.getItem(k) })).filter(i => i.value !== null);
+  try {
+    const res = await fetch(`/api/sync/${syncUserId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      lastSyncTime = data.updated_at;
+      localStorage.setItem('ck_last_sync', lastSyncTime);
+    }
+  } catch (e) { console.warn('Sync push-all failed:', e); }
+}
+
+function setSyncStatus(state) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  if (state === 'online') {
+    el.innerHTML = '<span class="sync-dot online"></span>Synced';
+  } else if (state === 'offline') {
+    el.innerHTML = '<span class="sync-dot offline"></span>Offline';
+  } else {
+    el.textContent = '';
+  }
+}
+
+async function submitLogin() {
+  const pin = document.getElementById('login-pin').value.trim();
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if (!pin) { errEl.textContent = 'Enter your PIN'; return; }
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin })
+    });
+    if (!res.ok) { errEl.textContent = 'Invalid PIN. Try again.'; return; }
+    const data = await res.json();
+    syncUserId = data.user_id;
+    sessionStorage.setItem('ck_sync_user', syncUserId);
+    _syncEnabled = true;
+    document.getElementById('login-overlay').style.display = 'none';
+    await startSync();
+  } catch (e) {
+    errEl.textContent = 'Could not connect to server.';
+  }
+}
+
+function skipLogin() {
+  _syncEnabled = false;
+  syncUserId = null;
+  document.getElementById('login-overlay').style.display = 'none';
+  setSyncStatus('offline');
+}
+
+async function startSync() {
+  // First pull from server, then push any local changes
+  await syncPull();
+  await syncPushAll();
+  // Poll every 30 seconds
+  setInterval(syncPull, 30000);
+  // Pull on tab focus
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncPull();
+  });
+}
 
 /* ══════════════════════════════════════════
    UNIT CONVERSION ENGINE  (Phase 2 — unchanged)
@@ -1040,7 +1220,7 @@ function toggleIngredients(id){
   btn.textContent=hidden?'▶':'▼';
 }
 function changeServings(id,d){modalServings=Math.max(1,Math.min(99,modalServings+d));refreshIngSection(id);}
-function setUnitSystem(s,id){unitSystem=s;localStorage.setItem('ck_units',s);refreshIngSection(id);}
+function setUnitSystem(s,id){unitSystem=s;localStorage.setItem('ck_units',s);syncPush(['ck_units']);refreshIngSection(id);}
 function refreshIngSection(id){
   const w=document.getElementById(`ing-wrap-${id}`);if(!w)return;
   const tmp=document.createElement('div');tmp.innerHTML=buildIngSection(id,modalServings);
@@ -1110,7 +1290,7 @@ function saveKey(){
   const st=document.getElementById('key-status');
   if(!k){st.textContent='Please enter a key.';st.className='key-status err';return;}
   if(!k.startsWith('sk-ant-')){st.textContent='Key should start with sk-ant-';st.className='key-status err';return;}
-  localStorage.setItem('ck_api_key',k);
+  localStorage.setItem('ck_api_key',k);syncPush(['ck_api_key']);
   showKeySaved(k);
   collapseKeyCard();
 }
@@ -1494,7 +1674,7 @@ function addManual(){
 ══════════════════════════════════════════ */
 function toggleTheme(){
   const d=document.documentElement.getAttribute('data-theme')==='dark';
-  applyTheme(d?'light':'dark');localStorage.setItem('ck_theme',d?'light':'dark');
+  const t=d?'light':'dark';applyTheme(t);localStorage.setItem('ck_theme',t);syncPush(['ck_theme']);
 }
 function applyTheme(t){
   if(t==='dark'){
@@ -1511,7 +1691,7 @@ function applyTheme(t){
 /* ══════════════════════════════════════════
    INIT
 ══════════════════════════════════════════ */
-(function init(){
+(async function init(){
   // Migrate recipes imported under the old dd_ key
   const old=localStorage.getItem('dd_imported');
   if(old){
@@ -1559,6 +1739,27 @@ function applyTheme(t){
   setupDropZone('csv-drop','csv-file','csv-drop-name',text=>{
     document.getElementById('csv-text').value=text;
   });
+
+  // Enter on PIN field
+  document.getElementById('login-pin').addEventListener('keydown',e=>{
+    if(e.key==='Enter')submitLogin();
+  });
+
+  // Sync: check for existing session or show login
+  if(syncUserId){
+    _syncEnabled=true;
+    startSync();
+  }else{
+    // Check if server has sync available
+    try{
+      const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:''})});
+      // Server responded — show login gate
+      document.getElementById('login-overlay').style.display='flex';
+    }catch(e){
+      // No server / running locally — skip sync silently
+      setSyncStatus('');
+    }
+  }
 })();
 </script>
 </body>
