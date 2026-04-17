@@ -6,6 +6,8 @@ Karrie's Kitchen is a **single-file HTML recipe app** (`KarriesKitchen.html`). N
 
 The file is ~1,265 lines structured as: `<style>` → `<body HTML>` → `<script>`. All CSS, HTML, and JS live in one file. Do not split into separate files unless explicitly asked.
 
+> **v2 rebuild lives in a separate repo.** The full Vite + React + TypeScript rebuild per the April 2026 plan is at `kosdiaz-design/Karries-Kitchen-2`. This repo (v1) keeps shipping bug fixes until v2 reaches parity, then gets retired. Do not add v2 code here.
+
 ---
 
 ## Tech stack
